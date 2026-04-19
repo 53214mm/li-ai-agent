@@ -120,17 +120,17 @@ public class LoveApp {
      * 会根据异常链中的类型和消息关键字识别以下场景：
      * 文档未找到、相似度过低、查询超时。
      * 识别失败时返回原始异常，避免误判。
+     * 由于部分框架异常缺少稳定类型，消息关键字匹配存在一定脆弱性，后续可按具体异常类型进一步收敛。
      */
     private RuntimeException translateQueryException(RuntimeException e) {
-        String allMessages = buildMessages(e);
-        String lower = allMessages.toLowerCase();
-        if (isDocumentNotFound(lower)) {
+        ExceptionSignals signals = collectSignals(e);
+        if (isDocumentNotFound(signals.lowerMessages())) {
             return new DocumentNotFoundException("未找到可用文档，请补充知识库后重试", e);
         }
-        if (isSimilarityTooLow(lower)) {
+        if (isSimilarityTooLow(signals.lowerMessages())) {
             return new SimilarityTooLowException("检索文档相似度过低，请换个更具体的问题重试", e);
         }
-        if (isQueryTimeout(e, lower)) {
+        if (isQueryTimeout(signals)) {
             return new QueryTimeoutException("查询超时，请稍后重试", e);
         }
         return e;
@@ -152,32 +152,33 @@ public class LoveApp {
                 || lower.contains("低于相似度阈值");
     }
 
-    private boolean isQueryTimeout(Throwable throwable, String lower) {
+    private boolean isQueryTimeout(ExceptionSignals signals) {
+        return signals.timeoutByType()
+                || signals.lowerMessages().contains("request timed out")
+                || signals.lowerMessages().contains("read timed out")
+                || signals.lowerMessages().contains("query timed out")
+                || signals.lowerMessages().contains("request timeout")
+                || signals.lowerMessages().contains("超时");
+    }
+
+    private ExceptionSignals collectSignals(Throwable throwable) {
+        StringBuilder sb = new StringBuilder();
+        boolean timeoutByType = false;
         Throwable current = throwable;
         while (current != null) {
             if (current instanceof java.util.concurrent.TimeoutException
                     || current instanceof java.net.http.HttpTimeoutException
                     || current instanceof java.net.SocketTimeoutException) {
-                return true;
+                timeoutByType = true;
             }
-            current = current.getCause();
-        }
-        return lower.contains("request timed out")
-                || lower.contains("read timed out")
-                || lower.contains("query timed out")
-                || lower.contains("request timeout")
-                || lower.contains("超时");
-    }
-
-    private String buildMessages(Throwable throwable) {
-        StringBuilder sb = new StringBuilder();
-        Throwable current = throwable;
-        while (current != null) {
             if (current.getMessage() != null) {
                 sb.append(current.getMessage()).append(" ");
             }
             current = current.getCause();
         }
-        return sb.toString();
+        return new ExceptionSignals(timeoutByType, sb.toString().toLowerCase());
+    }
+
+    private record ExceptionSignals(boolean timeoutByType, String lowerMessages) {
     }
 }
