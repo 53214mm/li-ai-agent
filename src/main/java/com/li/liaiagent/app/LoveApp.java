@@ -3,6 +3,9 @@ package com.li.liaiagent.app;
 import com.li.liaiagent.advisor.MyLoggerAdvisor;
 import com.li.liaiagent.advisor.ReReadingAdvisor;
 import com.li.liaiagent.advisor.ProhibitedWordsAdvisor;
+import com.li.liaiagent.advisor.exception.DocumentNotFoundException;
+import com.li.liaiagent.advisor.exception.QueryTimeoutException;
+import com.li.liaiagent.advisor.exception.SimilarityTooLowException;
 import com.li.liaiagent.chatMemory.FileBasedChatMemory;
 import com.li.liaiagent.chatMemory.RedisBasedChatMemory;
 import jakarta.annotation.Resource;
@@ -73,14 +76,17 @@ public class LoveApp {
      * @return
      */
     public String doChat(String message, String chatId) {
-        ChatResponse chatResponse = chatClient
-                .prompt()
-                .user(message)
-                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
-                .call()
-                .chatResponse();
-        String content = chatResponse.getResult().getOutput().getText();
-        return content;
+        try {
+            ChatResponse chatResponse = chatClient
+                    .prompt()
+                    .user(message)
+                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
+                    .call()
+                    .chatResponse();
+            return chatResponse.getResult().getOutput().getText();
+        } catch (RuntimeException e) {
+            throw translateQueryException(e);
+        }
     }
 
 
@@ -95,13 +101,89 @@ public class LoveApp {
      * @return
      */
     public LoveReport doChatWithReport(String message, String chatId) {
-        LoveReport loveReport = chatClient
-                .prompt()
-                .system(SYSTEM_PROMPT + "每次对话后都要生成恋爱结果，标题为{用户名}的恋爱报告，内容为建议列表")
-                .user(message)
-                .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
-                .call()
-                .entity(LoveReport.class);
-        return loveReport;
+        try {
+            return chatClient
+                    .prompt()
+                    .system(SYSTEM_PROMPT + "每次对话后都要生成恋爱结果，标题为{用户名}的恋爱报告，内容为建议列表")
+                    .user(message)
+                    .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
+                    .call()
+                    .entity(LoveReport.class);
+        } catch (RuntimeException e) {
+            throw translateQueryException(e);
+        }
+    }
+
+    /**
+     * 将底层查询异常转换为业务可识别的自定义异常。
+     * <p>
+     * 会根据异常链中的类型和消息关键字识别以下场景：
+     * 文档未找到、相似度过低、查询超时。
+     * 识别失败时返回原始异常，避免误判。
+     * 由于部分框架异常缺少稳定类型，消息关键字匹配存在一定脆弱性，后续可按具体异常类型进一步收敛。
+     */
+    private RuntimeException translateQueryException(RuntimeException e) {
+        ExceptionSignals signals = collectSignals(e);
+        if (isDocumentNotFound(signals.lowerMessages())) {
+            return new DocumentNotFoundException("未找到可用文档，请补充知识库后重试", e);
+        }
+        if (isSimilarityTooLow(signals.lowerMessages())) {
+            return new SimilarityTooLowException("检索文档相似度过低，请换个更具体的问题重试", e);
+        }
+        if (isQueryTimeout(signals)) {
+            return new QueryTimeoutException("查询超时，请稍后重试", e);
+        }
+        return e;
+    }
+
+    private boolean isDocumentNotFound(String lower) {
+        return lower.contains("document not found")
+                || lower.contains("no documents found")
+                || lower.contains("no relevant document")
+                || lower.contains("文档未找到")
+                || lower.contains("未找到文档")
+                || lower.contains("找不到文档");
+    }
+
+    private boolean isSimilarityTooLow(String lower) {
+        return lower.contains("similarity too low")
+                || lower.contains("similarity score is below threshold")
+                || lower.contains("相似度过低")
+                || lower.contains("低于相似度阈值");
+    }
+
+    private boolean isQueryTimeout(ExceptionSignals signals) {
+        return signals.timeoutByType()
+                || signals.lowerMessages().contains("request timed out")
+                || signals.lowerMessages().contains("read timed out")
+                || signals.lowerMessages().contains("query timed out")
+                || signals.lowerMessages().contains("request timeout")
+                || signals.lowerMessages().contains("请求超时")
+                || signals.lowerMessages().contains("查询超时");
+    }
+
+    private ExceptionSignals collectSignals(Throwable throwable) {
+        final int maxLength = 4096;
+        StringBuilder sb = new StringBuilder();
+        boolean timeoutByType = false;
+        Throwable current = throwable;
+        while (current != null) {
+            if (current instanceof java.util.concurrent.TimeoutException
+                    || current instanceof java.net.http.HttpTimeoutException
+                    || current instanceof java.net.SocketTimeoutException) {
+                timeoutByType = true;
+            }
+            if (current.getMessage() != null) {
+                sb.append(current.getMessage()).append(" ");
+                if (sb.length() >= maxLength) {
+                    break;
+                }
+            }
+            current = current.getCause();
+        }
+        return new ExceptionSignals(timeoutByType, sb.toString().toLowerCase());
+    }
+
+    private record ExceptionSignals(boolean timeoutByType, String lowerMessages) {
     }
 }
