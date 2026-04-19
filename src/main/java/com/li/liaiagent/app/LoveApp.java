@@ -114,6 +114,13 @@ public class LoveApp {
         }
     }
 
+    /**
+     * 将底层查询异常转换为业务可识别的自定义异常。
+     * <p>
+     * 会根据异常链中的类型和消息关键字识别以下场景：
+     * 文档未找到、相似度过低、查询超时。
+     * 识别失败时返回原始异常，避免误判。
+     */
     private RuntimeException translateQueryException(RuntimeException e) {
         String allMessages = buildMessages(e);
         String lower = allMessages.toLowerCase();
@@ -155,9 +162,10 @@ public class LoveApp {
             }
             current = current.getCause();
         }
-        return lower.contains("timeout")
-                || lower.contains("timed out")
+        return lower.contains("request timed out")
+                || lower.contains("read timed out")
                 || lower.contains("query timed out")
+                || lower.contains("request timeout")
                 || lower.contains("超时");
     }
 
