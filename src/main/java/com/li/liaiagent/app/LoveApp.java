@@ -137,8 +137,8 @@ public class LoveApp {
     }
 
     private boolean isDocumentNotFound(String lower) {
-        return lower.contains("no document")
-                || lower.contains("document not found")
+        return lower.contains("document not found")
+                || lower.contains("no documents found")
                 || lower.contains("no relevant document")
                 || lower.contains("文档未找到")
                 || lower.contains("未找到文档")
@@ -147,7 +147,7 @@ public class LoveApp {
 
     private boolean isSimilarityTooLow(String lower) {
         return lower.contains("similarity too low")
-                || lower.contains("similarity threshold")
+                || lower.contains("similarity score is below threshold")
                 || lower.contains("相似度过低")
                 || lower.contains("低于相似度阈值");
     }
@@ -158,10 +158,12 @@ public class LoveApp {
                 || signals.lowerMessages().contains("read timed out")
                 || signals.lowerMessages().contains("query timed out")
                 || signals.lowerMessages().contains("request timeout")
-                || signals.lowerMessages().contains("超时");
+                || signals.lowerMessages().contains("请求超时")
+                || signals.lowerMessages().contains("查询超时");
     }
 
     private ExceptionSignals collectSignals(Throwable throwable) {
+        final int maxLength = 4096;
         StringBuilder sb = new StringBuilder();
         boolean timeoutByType = false;
         Throwable current = throwable;
@@ -173,6 +175,9 @@ public class LoveApp {
             }
             if (current.getMessage() != null) {
                 sb.append(current.getMessage()).append(" ");
+                if (sb.length() >= maxLength) {
+                    break;
+                }
             }
             current = current.getCause();
         }
