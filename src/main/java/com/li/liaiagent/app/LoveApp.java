@@ -5,6 +5,8 @@ import com.li.liaiagent.advisor.ReReadingAdvisor;
 import com.li.liaiagent.advisor.ProhibitedWordsAdvisor;
 import com.li.liaiagent.chatMemory.FileBasedChatMemory;
 import com.li.liaiagent.chatMemory.RedisBasedChatMemory;
+import com.li.liaiagent.rag.LoveAppRagCustomAdvisorFactory;
+import com.li.liaiagent.rag.QueryRewriter;
 import jakarta.annotation.Resource;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
@@ -109,6 +111,8 @@ public class LoveApp {
     private VectorStore loveAppVectorStore;
     @Resource
     private Advisor loveAppRagCloudAdvisor;
+    @Resource
+    private QueryRewriter queryRewriter;
 
     /**
      * AI RAG对话
@@ -118,14 +122,22 @@ public class LoveApp {
      * @return
      */
     public String doChatWithRag(String message, String chatId) {
+        message = queryRewriter.doQueryRewrite(message);
+
         ChatResponse chatResponse = chatClient
                 .prompt()
                 .user(message)
                 .advisors(spec -> spec.param(ChatMemory.CONVERSATION_ID, chatId))
-                // 应用 RAG 知识库问答
+                // 应用 RAG 知识库问答 QuestionAnswerAdvisor
 //                .advisors(new QuestionAnswerAdvisor(loveAppVectorStore))
                 // 应用 RAG 检索增强服务（基于云知识库服务）
                 .advisors(loveAppRagCloudAdvisor)
+                // 应用自定义的 RAG 检索增强服务（文档查询器 + 上下文增强器）RetrievalAugmentationAdvisor
+//                .advisors(
+//                        LoveAppRagCustomAdvisorFactory.createLoveAppRagCustomAdvisor(
+//                                loveAppVectorStore,"单身"
+//                        )
+//                )
                 .call()
                 .chatResponse();
         String content = chatResponse.getResult().getOutput().getText();
