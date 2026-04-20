@@ -12,6 +12,13 @@ spring:
       base-url: http://localhost:11434
       chat:
         model: gemma3:1b
+# pgvector向量数据库配置
+    vectorstore:
+      pgvector:
+        index-type: HNSW
+        dimensions: 1536
+        distance-type: COSINE_DISTANCE
+        max-document-batch-size: 10000 # Optional: Maximum number of documents per batch
   # 1. Redis 核心配置
   data:
     redis:

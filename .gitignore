@@ -1,5 +1,6 @@
 application-local.yaml
 tmp
+test-classes
 
 HELP.md
 target/
