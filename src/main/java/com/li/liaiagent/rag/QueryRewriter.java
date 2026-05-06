@@ -4,6 +4,7 @@ package com.li.liaiagent.rag;
 
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.model.ChatModel;
+import org.springframework.beans.factory.annotation.Qualifier;
 
 import org.springframework.ai.rag.Query;
 import org.springframework.ai.rag.preretrieval.query.transformation.QueryTransformer;
@@ -18,7 +19,7 @@ public class QueryRewriter {
 
     public final QueryTransformer queryTransformer;
 
-    public QueryRewriter(ChatModel dashscopeChatModel) {
+    public QueryRewriter(@Qualifier("dashScopeChatModel") ChatModel dashscopeChatModel) {
         ChatClient.Builder builder = ChatClient.builder(dashscopeChatModel);
         this.queryTransformer = RewriteQueryTransformer.builder()
                 .chatClientBuilder(builder)

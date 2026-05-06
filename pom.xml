@@ -5,7 +5,7 @@
     <parent>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-starter-parent</artifactId>
-        <version>3.4.4</version>
+        <version>3.5.10</version>
         <relativePath/> <!-- lookup parent from repository -->
     </parent>
     <groupId>com.li</groupId>
@@ -34,14 +34,14 @@
             <dependency>
                 <groupId>com.alibaba.cloud.ai</groupId>
                 <artifactId>spring-ai-alibaba-bom</artifactId>
-                <version>1.0.0.2</version>
+                <version>1.1.2.2</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
             <dependency>
                 <groupId>org.springframework.ai</groupId>
                 <artifactId>spring-ai-bom</artifactId>
-                <version>1.0.0</version>
+                <version>1.1.2</version>
                 <type>pom</type>
                 <scope>import</scope>
             </dependency>
@@ -58,10 +58,16 @@
             <artifactId>dashscope-sdk-java</artifactId>
             <version>2.19.1</version>
         </dependency>
-        <!-- Spring AI Alibaba -->
+        <!-- Spring AI Alibaba (1.1.2.x 的 starter 是空壳，需显式引入实现模块) -->
         <dependency>
             <groupId>com.alibaba.cloud.ai</groupId>
             <artifactId>spring-ai-alibaba-starter-dashscope</artifactId>
+            <version>1.1.2.2</version>
+        </dependency>
+        <dependency>
+            <groupId>com.alibaba.cloud.ai</groupId>
+            <artifactId>spring-ai-alibaba-dashscope</artifactId>
+            <version>1.1.2.2</version>
         </dependency>
         <!-- https://docs.spring.io/spring-ai/reference/api/chat/ollama-chat.html -->
         <dependency>
@@ -82,17 +88,12 @@
             <artifactId>postgresql</artifactId>
             <scope>runtime</scope>
         </dependency>
-<!--        <dependency>-->
-<!--            <groupId>org.springframework.ai</groupId>-->
-<!--            <artifactId>spring-ai-pgvector-store</artifactId>-->
-<!--        </dependency>-->
         <!-- 自动整合 PGVector 向量存储 -->
-                <dependency>
-                    <groupId>org.springframework.ai</groupId>
-                    <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
-                    <version>1.0.0-M7</version>
-                </dependency>
-        <!-- Spring AI MCP Client -->
+        <dependency>
+            <groupId>org.springframework.ai</groupId>
+            <artifactId>spring-ai-starter-vector-store-pgvector</artifactId>
+        </dependency>
+        <!-- Spring AI MCP Client (1.1.x 自带新版 MCP SDK，headers 自动配置可用) -->
         <dependency>
             <groupId>org.springframework.ai</groupId>
             <artifactId>spring-ai-starter-mcp-client</artifactId>
@@ -170,6 +171,13 @@
             <groupId>junit</groupId>
             <artifactId>junit</artifactId>
             <scope>test</scope>
+        </dependency>
+
+<!--   百度搜索api     -->
+        <dependency>
+            <groupId>com.squareup.okhttp3</groupId>
+            <artifactId>okhttp</artifactId>
+            <version>4.12.0</version>
         </dependency>
     </dependencies>
 

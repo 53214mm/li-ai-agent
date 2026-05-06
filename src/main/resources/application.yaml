@@ -3,6 +3,9 @@ spring:
     name: li-ai-agent
   profiles:
     active: local
+  autoconfigure:
+    exclude:
+      - org.springframework.ai.model.ollama.autoconfigure.OllamaEmbeddingAutoConfiguration
   ai:
     dashscope:
       chat:
@@ -19,6 +22,14 @@ spring:
         dimensions: 1536
         distance-type: COSINE_DISTANCE
         max-document-batch-size: 10000 # Optional: Maximum number of documents per batch
+    mcp:
+      client:
+        sse:
+          connections:
+            mxai-mcp-server:
+              url: https://mcp.mxai.cn
+              sse-endpoint: /sse
+
   # 1. Redis 核心配置
   data:
     redis:
