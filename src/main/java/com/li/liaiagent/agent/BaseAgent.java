@@ -8,9 +8,12 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.ai.chat.client.ChatClient;
 import org.springframework.ai.chat.messages.Message;
 import org.springframework.ai.chat.messages.UserMessage;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.concurrent.CompletableFuture;
 
 /**
  *  抽象基础代理类，用于管理代理状态和执行流程。
@@ -80,6 +83,97 @@ public abstract class BaseAgent {
             // 清理资源
             this.cleanup();
         }
+    }
+
+    /**
+     * 流式运行代理
+     *
+     * @param userPrompt 用户提示词
+     * @return 执行结果
+     */
+    public SseEmitter runStream(String userPrompt) {
+        // 创建一个超时时间较长的 SseEmitter
+        SseEmitter emitter = new SseEmitter(180000L); // 3分钟超时
+
+        CompletableFuture.runAsync(()->{
+            try{
+                if (this.state != AgentState.IDLE) {
+                    emitter.send("Cannot run agent from state: " + this.state);
+                    emitter.complete();
+                    return;
+                }
+                if (StringUtil.isBlank(userPrompt)) {
+                    emitter.send("Cannot run agent with empty user prompt");
+                    emitter.complete();
+                    return;
+                }
+            }catch (Exception e){
+                emitter.completeWithError(e);
+            }
+
+            // 更改状态
+            state = AgentState.RUNNING;
+            // 记录消息上下文
+            messageList.add(new UserMessage(userPrompt));
+            // 保存结果列表
+            List<String> results = new ArrayList<>();
+            try {
+                for (int i = 0; i < maxSteps && state != AgentState.FINISHED; i++) {
+                    int stepNumber = i + 1;
+                    currentStep = stepNumber;
+                    log.info("Executing step " + stepNumber + "/" + maxSteps);
+                    String stepResult = step();
+                    boolean isFinal = state == AgentState.FINISHED;
+
+                    // 检查是否包含 THINK/ACT 分隔符（工具调用步骤）
+                    int actIdx = stepResult.indexOf("ACT: ");
+                    if (actIdx > 0 && stepResult.startsWith("THINK: ")) {
+                        String thinkText = stepResult.substring(7, actIdx).trim();
+                        String actText = stepResult.substring(actIdx + 5).trim();
+                        // 发送思考文字（折叠）
+                        emitter.send("[思考]Step " + stepNumber + " 思考: " + thinkText);
+                        // 发送行动结果（折叠）
+                        String actPrefix = (isFinal && !thinkText.isEmpty()) ? "[回复]" : "[思考]";
+                        emitter.send(actPrefix + "Step " + stepNumber + ": " + actText);
+                    } else {
+                        String prefix = isFinal ? "[回复]" : "[思考]";
+                        emitter.send(prefix + "Step " + stepNumber + ": " + stepResult);
+                    }
+                }
+                // 检查是否超出步骤限制
+                if (currentStep >= maxSteps) {
+                    state = AgentState.FINISHED;
+                    results.add("Terminated: Reached max steps (" + maxSteps + ")");
+                    emitter.send("Terminated: Reached max steps (" + maxSteps + ")");
+                }
+                emitter.complete();
+            } catch (Exception e) {
+                state = AgentState.ERROR;
+                log.error("Error executing agent", e);
+                try {
+                    emitter.send("执行错误" + e.getMessage());
+                    emitter.complete();
+                } catch (IOException ex) {
+                    emitter.completeWithError(ex);
+                }
+            } finally {
+                // 清理资源
+                this.cleanup();
+            }
+            emitter.onTimeout(()->{
+                this.state = AgentState.ERROR;
+                this.cleanup();
+                log.warn("Agent execution timed out");
+            });
+            emitter.onCompletion(()->{
+                if(this.state==AgentState.RUNNING){
+                    this.state = AgentState.FINISHED;
+                }
+                this.cleanup();
+                log.info("Agent execution completed");
+            });
+        });
+        return emitter;
     }
     /**
      * 执行单个步骤

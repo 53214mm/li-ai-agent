@@ -1,5 +1,6 @@
 package com.li.liaiagent.agent;
 
+import com.li.liaiagent.agent.model.AgentState;
 import lombok.Data;
 import lombok.EqualsAndHashCode;
 
@@ -35,6 +36,7 @@ public abstract class ReActAgent extends BaseAgent {
         try {
             boolean shouldAct = think();
             if (!shouldAct) {
+                setState(AgentState.FINISHED);
                 return "思考完成 - 无需行动";
             }
             return act();

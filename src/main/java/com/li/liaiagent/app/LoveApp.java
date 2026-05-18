@@ -87,6 +87,21 @@ public class LoveApp {
         return content;
     }
 
+    /**
+     * AI 基础对话（支持多轮对话记忆）流式
+     *
+     * @param message
+     * @param chatId
+     * @return
+     */
+    public Flux<String> doChatByStream(String message, String chatId) {
+        return chatClient
+                .prompt()
+                .user(message)
+                .stream()
+                .content();
+    }
+
 
     record LoveReport(String title, List<String> suggestions) {
     }
